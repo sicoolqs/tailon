@@ -2,8 +2,8 @@ package main
 
 import (
 	"os"
-	"path"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -22,7 +22,7 @@ func fileInfo(path string) *ListEntry {
 	entry.Path = path
 
 	info, err := os.Stat(path)
-	if !os.IsNotExist(err) {
+	if err == nil {
 		entry.Exists = true
 		entry.Size = info.Size()
 		entry.ModTime = info.ModTime()
@@ -31,10 +31,13 @@ func fileInfo(path string) *ListEntry {
 	return &entry
 }
 
-var allFiles map[string]bool
+var (
+	allFilesMu sync.RWMutex
+	allFiles   map[string]bool
+)
 
 func createListing(filespecs []FileSpec) map[string][]*ListEntry {
-	allFiles = make(map[string]bool)
+	files := make(map[string]bool)
 	res := make(map[string][]*ListEntry)
 
 	for _, spec := range filespecs {
@@ -52,28 +55,36 @@ func createListing(filespecs []FileSpec) map[string][]*ListEntry {
 				entry.Alias = entry.Path
 			}
 			res[group] = append(res[group], entry)
-			allFiles[entry.Path] = true
+			files[entry.Path] = true
 		case "glob":
 			matches, _ := filepath.Glob(spec.Path)
 			for _, match := range matches {
 				entry := fileInfo(match)
 				if spec.Alias != "" {
-					entry.Alias = path.Join(spec.Alias, path.Base(entry.Path))
+					entry.Alias = filepath.Join(spec.Alias, filepath.Base(entry.Path))
 				} else {
 					cwd, _ := os.Getwd()
 					rel, _ := filepath.Rel(cwd, entry.Path)
 					entry.Alias = rel
 				}
 				res[group] = append(res[group], entry)
-				allFiles[entry.Path] = true
+				files[entry.Path] = true
 			}
 		}
 	}
+
+	// Swap the complete map under the lock. Readers can then use the old
+	// snapshot without observing a partially built map or a concurrent write.
+	allFilesMu.Lock()
+	allFiles = files
+	allFilesMu.Unlock()
 
 	return res
 }
 
 func fileAllowed(path string) bool {
+	allFilesMu.RLock()
 	_, ok := allFiles[path]
+	allFilesMu.RUnlock()
 	return ok
 }

@@ -171,9 +171,17 @@ func parseFileSpec(spec string) (FileSpec, error) {
 		filespec.Type = "glob"
 	} else {
 		stat, err := os.Lstat(path)
-		if os.IsNotExist(err) || stat.Mode().IsRegular() {
+		switch {
+		case os.IsNotExist(err):
 			filespec.Type = "file"
-		} else if stat.Mode().IsDir() {
+		case err != nil:
+			// Keep the previous fallback behavior for paths that cannot be
+			// inspected (for example, permission errors) without dereferencing
+			// a nil FileInfo.
+			filespec.Type = "file"
+		case stat.Mode().IsRegular():
+			filespec.Type = "file"
+		case stat.Mode().IsDir():
 			filespec.Type = "dir"
 		}
 	}
@@ -280,7 +288,7 @@ func main() {
 	config.RelativeRoot = strings.TrimRight(config.RelativeRoot, "/") + "/"
 
 	// Handle command-line file specs.
-	filespecs := make([]FileSpec, len(flag.Args()))
+	filespecs := make([]FileSpec, 0, len(flag.Args()))
 	for _, spec := range flag.Args() {
 		if filespec, err := parseFileSpec(spec); err != nil {
 			fmt.Fprintf(os.Stderr, "Error parsing argument '%s': %s\n", spec, err)
@@ -320,19 +328,27 @@ func startServer(config *Config, bindAddr string) {
 	server := setupServer(config, bindAddr, loggerHTML)
 
 	if strings.Contains(bindAddr, ":") {
-		server.ListenAndServe()
+		if err := server.ListenAndServe(); err != nil {
+			log.Printf("error: server on %s stopped: %v", bindAddr, err)
+		}
 	} else {
 		os.Remove(bindAddr)
 
-		unixAddr, _ := net.ResolveUnixAddr("unix", bindAddr)
-		unixListener, err := net.ListenUnix("unix", unixAddr)
-		unixListener.SetUnlinkOnClose(true)
-
+		unixAddr, err := net.ResolveUnixAddr("unix", bindAddr)
 		if err != nil {
-			panic(err)
+			log.Printf("error: resolve unix socket %s: %v", bindAddr, err)
+			return
+		}
+		unixListener, err := net.ListenUnix("unix", unixAddr)
+		if err != nil {
+			log.Printf("error: listen on unix socket %s: %v", bindAddr, err)
+			return
 		}
 
+		unixListener.SetUnlinkOnClose(true)
 		defer unixListener.Close()
-		server.Serve(unixListener)
+		if err := server.Serve(unixListener); err != nil {
+			log.Printf("error: server on %s stopped: %v", bindAddr, err)
+		}
 	}
 }

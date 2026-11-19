@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 )
 
@@ -21,7 +22,8 @@ func TestCliFileSpec(t *testing.T) {
 		t.Fatalf("%s != %s", b, res)
 	}
 
-	a, b = "alias=1,group=\"a b\",/var/log/", FileSpec{"/var/log/", "dir", "1", "a b"}
+	dir := t.TempDir()
+	a, b = "alias=1,group=\"a b\","+dir, FileSpec{dir, "dir", "1", "a b"}
 	if res, err := parseFileSpec(a); err != nil || res != b {
 		t.Fatalf("%s != %s", b, res)
 	}
@@ -52,8 +54,11 @@ func TestListingWildcard(t *testing.T) {
 	lst = createListing([]FileSpec{spec})
 
 	aliases = getAliases(lst["__default__"])
-	expect := `["logs/1.log" "logs/2.log" "logs/3.log" "logs/4.log"]`
-	if fmt.Sprintf("%q", aliases) != expect {
+	expect := make([]string, 4)
+	for i := range expect {
+		expect[i] = filepath.Join("logs", fmt.Sprintf("%d.log", i+1))
+	}
+	if fmt.Sprintf("%q", aliases) != fmt.Sprintf("%q", expect) {
 		t.Fatalf("%q != %q", aliases, expect)
 	}
 
