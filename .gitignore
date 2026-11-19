@@ -2,7 +2,6 @@
 node_modules/
 /tailon
 /gin-bin
-/dist
 .pytest_cache
 tests/.venv
 frontend_bin.go
@@ -31,4 +30,5 @@ frontend_bin.go
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-dist/
+# Build output
+/dist/

@@ -3,7 +3,11 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
-OUT="${1:-tailon-2.0.0-stability-linux-amd64}"
+OUT_DIR="dist"
+OUT_NAME="${1:-tailon-2.0.0-stability-linux-amd64}"
+OUT="${OUT_DIR}/${OUT_NAME}"
+
+mkdir -p "${OUT_DIR}"
 
 echo "Generating embedded frontend assets..."
 go generate ./...
