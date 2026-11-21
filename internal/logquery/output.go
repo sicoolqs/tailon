@@ -13,7 +13,13 @@ func FitResponse(v any, maxBytes int) bool {
 		return false
 	}
 	changed := false
-	for jsonSize(v) > maxBytes {
+	// The iteration cap guarantees termination even if a shrink step cannot
+	// reduce the encoded size any further.
+	const maxShrinkIterations = 32
+	for i := 0; i < maxShrinkIterations; i++ {
+		if jsonSize(v) <= maxBytes {
+			break
+		}
 		if !shrinkOnce(v) {
 			break
 		}
@@ -181,17 +187,24 @@ func truncateAtLineBoundary(s string, limit int) string {
 const responseMessageLimit = 512
 
 func truncateUTF8(s string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
 	if len(s) <= limit {
 		return s
 	}
-	cut := limit
+	const suffix = "..."
+	if limit <= len(suffix) {
+		return suffix[:limit]
+	}
+	cut := limit - len(suffix)
 	for cut > 0 && (s[cut]&0xC0) == 0x80 {
 		cut--
 	}
 	if cut <= 0 {
-		return "..."
+		return suffix
 	}
-	return s[:cut] + "..."
+	return s[:cut] + suffix
 }
 
 func truncateTailMessages(r *TailResult) bool {

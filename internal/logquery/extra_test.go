@@ -3,6 +3,7 @@ package logquery
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,6 +152,53 @@ func TestScanBudgetTruncation(t *testing.T) {
 	}
 	if !res.Meta.Truncated || res.Meta.TruncationReason != TruncationScanLimit {
 		t.Fatalf("meta = %#v", res.Meta)
+	}
+}
+
+func TestFitResponseLargeTraceTerminates(t *testing.T) {
+	res := &TraceResult{Meta: newMeta()}
+	for i := 0; i < 200; i++ {
+		res.Timeline = append(res.Timeline, TraceEvent{
+			Message:    strings.Repeat("m", 2000),
+			Stacktrace: []string{strings.Repeat("s", 2000)},
+		})
+	}
+	res.EventCount = 200
+	res.Meta.ReturnedCount = 200
+
+	done := make(chan struct{})
+	go func() {
+		FitResponse(res, 64<<10)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("FitResponse did not terminate")
+	}
+
+	body, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) > 64<<10 {
+		t.Fatalf("response is %d bytes, limit is %d", len(body), 64<<10)
+	}
+	if len(res.Timeline) == 0 {
+		t.Fatal("all events were dropped instead of trimmed")
+	}
+	if res.EventCount != len(res.Timeline)+len(res.Untimed) {
+		t.Fatalf("event_count = %d, timeline = %d", res.EventCount, len(res.Timeline))
+	}
+}
+
+func TestTruncateUTF8Bound(t *testing.T) {
+	s := strings.Repeat("中", 1000)
+	for _, limit := range []int{1, 2, 3, 4, 10, 512} {
+		out := truncateUTF8(s, limit)
+		if len(out) > limit {
+			t.Fatalf("limit %d produced %d bytes", limit, len(out))
+		}
 	}
 }
 
