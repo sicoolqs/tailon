@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/gvalkov/tailon/internal/mcpserver"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pelletier/go-toml"
 	flag "github.com/spf13/pflag"
@@ -78,6 +79,11 @@ The following options can be set through the config file:
   # the default configuration listed below.
   [commands]
 
+  # Optional MCP server for AI agents. Disabled by default.
+  [mcp]
+  enabled = false
+  path = "/mcp"
+
   # File, glob and dir filespecs are similar in principle to their
   # command-line counterparts.
 
@@ -110,6 +116,12 @@ const defaultTomlConfig = `
     stdin = "tail"
     action = ["awk", "--sandbox", "$script"]
     default = "{print $0; fflush()}"
+
+  # The MCP server is disabled by default and reuses the Tailon HTTP server.
+  # See the README for the complete [mcp] configuration reference.
+  [mcp]
+  enabled = false
+  path = "/mcp"
 `
 
 // CommandSpec defines a command that the server can execute.
@@ -217,6 +229,7 @@ type Config struct {
 	CommandSpecs   map[string]CommandSpec
 	CommandScripts map[string]string
 	FileSpecs      []FileSpec
+	MCP            mcpserver.Config
 }
 
 func makeConfig(configContent string) *Config {
@@ -236,8 +249,21 @@ func makeConfig(configContent string) *Config {
 		CommandSpecs:  commandSpecs,
 	}
 
+	mcpConfig, err := parseMCPConfig(treeOrNil(defaults.Get("mcp")))
+	if err != nil {
+		log.Fatal(err)
+	}
+	config.MCP = mcpConfig
+
 	mapstructure.Decode(defaults.Get("allow-commands"), &config.AllowCommandNames)
 	return &config
+}
+
+func treeOrNil(v interface{}) *toml.Tree {
+	if tree, ok := v.(*toml.Tree); ok {
+		return tree
+	}
+	return nil
 }
 
 var config = &Config{}
@@ -252,6 +278,8 @@ func main() {
 	flag.StringVarP(&config.RelativeRoot, "relative-root", "r", config.RelativeRoot, "Webapp relative root")
 	flag.BoolVarP(&config.AllowDownload, "allow-download", "a", config.AllowDownload, "Allow file downloads")
 	flag.StringVarP(&config.ConfigPath, "config", "c", "", "Path to TOML configuration file")
+	flag.BoolVar(&config.MCP.Enabled, "mcp-enabled", config.MCP.Enabled, "Enable the read-only MCP server")
+	flag.StringVar(&config.MCP.Path, "mcp-path", config.MCP.Path, "MCP HTTP endpoint path")
 	flag.Parse()
 
 	flag.Usage = func() {
@@ -307,6 +335,17 @@ func main() {
 	config.CommandScripts = make(map[string]string)
 	for cmd, values := range config.CommandSpecs {
 		config.CommandScripts[cmd] = values.Default
+	}
+
+	if err := config.MCP.Validate(config.RelativeRoot); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		os.Exit(1)
+	}
+	if config.MCP.Enabled {
+		if err := initMCP(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			os.Exit(1)
+		}
 	}
 
 	log.Print("Generate initial file listing")

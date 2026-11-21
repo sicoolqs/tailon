@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -68,6 +69,14 @@ func setupRoutes(relativeroot string) *http.ServeMux {
 	router.Handle(relativeroot+"vfs/", staticHandler)
 	router.Handle(relativeroot+"ws/", sockjsHandler)
 	router.HandleFunc(relativeroot+"files/", downloadHandler)
+	if mcpHandler != nil {
+		router.Handle(config.MCP.Path, mcpHandler)
+	} else if path := config.MCP.Path; strings.HasPrefix(path, "/") && path != "/" {
+		// Keep the reserved MCP path from being served by the web index when
+		// MCP is disabled. Misconfiguration is reported by the MCP validation
+		// only when MCP is enabled.
+		router.HandleFunc(path, http.NotFound)
+	}
 	router.HandleFunc(relativeroot+"", indexHandler)
 
 	return router
@@ -77,12 +86,21 @@ func setupServer(config *Config, addr string, logger *log.Logger) *http.Server {
 	router := setupRoutes(config.RelativeRoot)
 	loggingRouter := handlers.LoggingHandler(os.Stderr, router)
 
+	writeTimeout := 10 * time.Second
+	if config.MCP.Enabled {
+		// MCP queries have their own budget; the HTTP write deadline must not
+		// cut a valid response short.
+		if t := config.MCP.Limits.QueryTimeout + 10*time.Second; t > writeTimeout {
+			writeTimeout = t
+		}
+	}
+
 	server := http.Server{
 		Addr:         addr,
 		Handler:      loggingRouter,
 		ErrorLog:     logger,
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: writeTimeout,
 		IdleTimeout:  15 * time.Second,
 	}
 

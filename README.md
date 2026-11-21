@@ -63,6 +63,8 @@ Tailon is a webapp for searching through files and streams.
   -c, --config string          Path to TOML configuration file
   -h, --help                   Show this help message and exit
   -e, --help-config            Show configuration file help and exit
+      --mcp-enabled            Enable the read-only MCP server
+      --mcp-path string        MCP HTTP endpoint path (default "/mcp")
   -r, --relative-root string   Webapp relative root (default "/")
 
 Tailon can be configured via a TOML config file or command-line flags.
@@ -123,6 +125,11 @@ The following options can be set through the config file:
   # the default configuration listed below.
   [commands]
 
+  # Optional MCP server for AI agents. Disabled by default.
+  [mcp]
+  enabled = false
+  path = "/mcp"
+
   # File, glob and dir filespecs are similar in principle to their
   # command-line counterparts.
 
@@ -153,8 +160,40 @@ At startup tailon loads the following default configuration:
     stdin = "tail"
     action = ["awk", "--sandbox", "$script"]
     default = "{print $0; fflush()}"
+
+  # The MCP server is disabled by default and reuses the Tailon HTTP server.
+  # See the README for the complete [mcp] configuration reference.
+  [mcp]
+  enabled = false
+  path = "/mcp"
 ```
 [//]: # (END HELP_CONFIG)
+
+## MCP server for AI agents
+
+Tailon can expose a read-only MCP (Model Context Protocol) server on the same
+HTTP listener as the web UI. AI agents can then discover log files, read recent
+events, search, summarize errors and trace requests without shell access.
+
+Enable it in the TOML configuration:
+
+```toml
+[mcp]
+enabled = true
+path = "/mcp"
+```
+
+or with the command-line flags:
+
+```sh
+tailon --mcp-enabled --mcp-path /mcp /var/log/myapp/*.log
+```
+
+The endpoint is stateless Streamable HTTP and requires no token on a trusted
+network. All tools are read-only and restricted to the files already configured
+in Tailon. See [docs/MCP.md](docs/MCP.md) for the eight tools, client
+configuration for Claude Code, OpenCode and Codex, the full configuration
+reference, security boundaries and resource limits.
 
 ## Security
 

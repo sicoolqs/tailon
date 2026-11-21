@@ -13,10 +13,15 @@ main.go            CLI, TOML configuration, startup
 server.go          HTTP/SockJS handlers, command execution, session lifecycle
 filelister.go      File specs, UI file listing, allowed-file lookup
 cmd/               Vendored command runner with streaming stdout/stderr
+internal/logquery/ Read-only log query engine (registry, readers, parser, search)
+internal/mcpserver/ MCP Streamable HTTP server, tools, middleware, schemas
+mcp.go             MCP configuration parsing and startup wiring
 frontend/          Vue frontend sources and prebuilt dist assets
 frontend_gen.go    Embeds frontend/dist and frontend/templates
 scripts/           Build helper scripts
 dist/              Local build output (ignored by Git)
+docs/MCP.md        MCP configuration, tools and client documentation
+docs/MCP_TEST_REPORT.md  Recorded MCP verification results
 ```
 
 ## Toolchain and targets
@@ -76,6 +81,22 @@ sh scripts/build-linux-amd64.sh
 sh scripts/build-linux-amd64.sh tailon-2.0.0-custom-linux-amd64
 ```
 
+Build the Linux ARM64 binary:
+
+```sh
+sh scripts/build-linux-arm64.sh
+```
+
+Opt-in MCP large-file and soak tests:
+
+```sh
+TAILON_LARGE_TEST=1 TAILON_LARGE_TEST_SIZE_MB=64 \
+    go test -run TestLargeFileTailBounded -v ./internal/logquery/
+
+TAILON_SOAK=1 TAILON_SOAK_CALLS=1000 \
+    go test -run TestSoakToolCalls -v ./internal/logquery/
+```
+
 Output directory is always `dist/`:
 
 ```text
@@ -85,6 +106,24 @@ dist/tailon-2.0.0-stability-linux-amd64
 `dist/` is ignored by Git. Do not commit build artifacts.
 
 ## Runtime architecture and invariants
+
+### MCP server
+
+- MCP is disabled by default and shares the existing HTTP server, port and
+  configured file scope. Do not start a separate listener.
+- Every file access must go through `logquery.Registry.Open`, which re-resolves
+  the `file_id`, resolves symlinks, re-checks the configured scope and verifies
+  the opened descriptor.
+- MCP tools are read-only. Never build shell commands from tool arguments.
+- All query results must respect `mcp.limits`: scan bytes, response bytes,
+  result counts, context lines, regex length, concurrency and timeout.
+- Recover panics at the tool and HTTP handler boundaries. A tool failure must
+  never terminate the process or disturb the web UI.
+- Keep cursor payloads HMAC-signed and re-validate file identity on resume.
+- New tools must be added to `internal/mcpserver/schema.go`, registered in
+  `tools.go`, covered by tests, and documented in `docs/MCP.md`.
+
+### Web UI and command pipeline
 
 - One `serveSession` goroutine reads client messages.
 - One `wsWriter` goroutine owns the complete command pipeline and is the only
