@@ -25,7 +25,8 @@ a promise of production performance.
 | Linux ARM64 build | `CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build` | PASS |
 | Live binary smoke test | Start Tailon with `[mcp] enabled=true`, call `initialize`, `tools/list`, `logs_list`, `logs_search` | PASS (HTTP 200, 8 tools) |
 | Web UI unaffected | `GET /` with MCP enabled | PASS (HTTP 200) |
-| MCP disabled | `POST /mcp` with MCP disabled | PASS (HTTP 404) |
+| MCP enabled by default | Start Tailon without an `[mcp]` section, call `initialize` | PASS (HTTP 200) |
+| MCP explicitly disabled | `POST /mcp` with `[mcp] enabled = false` | PASS (HTTP 404) |
 
 ### Protocol tests
 

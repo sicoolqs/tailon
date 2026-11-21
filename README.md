@@ -125,9 +125,10 @@ The following options can be set through the config file:
   # the default configuration listed below.
   [commands]
 
-  # Optional MCP server for AI agents. Disabled by default.
+  # Optional MCP server for AI agents. Enabled by default.
+  # Set enabled = false to disable it.
   [mcp]
-  enabled = false
+  enabled = true
   path = "/mcp"
 
   # File, glob and dir filespecs are similar in principle to their
@@ -161,21 +162,23 @@ At startup tailon loads the following default configuration:
     action = ["awk", "--sandbox", "$script"]
     default = "{print $0; fflush()}"
 
-  # The MCP server is disabled by default and reuses the Tailon HTTP server.
-  # See the README for the complete [mcp] configuration reference.
+  # The MCP server is enabled by default and reuses the Tailon HTTP server.
+  # Set enabled = false to disable it. See the README for the complete [mcp]
+  # configuration reference.
   [mcp]
-  enabled = false
+  enabled = true
   path = "/mcp"
 ```
 [//]: # (END HELP_CONFIG)
 
 ## MCP server for AI agents
 
-Tailon can expose a read-only MCP (Model Context Protocol) server on the same
-HTTP listener as the web UI. AI agents can then discover log files, read recent
-events, search, summarize errors and trace requests without shell access.
+Tailon exposes a read-only MCP (Model Context Protocol) server on the same
+HTTP listener as the web UI by default. AI agents can then discover log files,
+read recent events, search, summarize errors and trace requests without shell
+access.
 
-Enable it in the TOML configuration:
+The endpoint is available at `http://<host>:<port>/mcp`:
 
 ```toml
 [mcp]
@@ -183,7 +186,15 @@ enabled = true
 path = "/mcp"
 ```
 
-or with the command-line flags:
+To disable it, set `enabled = false` explicitly:
+
+```toml
+[mcp]
+enabled = false
+```
+
+The command-line flags override the built-in defaults when no config file is
+used:
 
 ```sh
 tailon --mcp-enabled --mcp-path /mcp /var/log/myapp/*.log

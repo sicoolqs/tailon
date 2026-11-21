@@ -13,9 +13,14 @@ additional runtime dependency.
 - All tools are read-only and can only access files already configured in
   Tailon.
 
-## Enabling the server
+## Enabling and disabling the server
+
+MCP is enabled by default at `/mcp`. No configuration is required for a fresh
+or upgraded Tailon deployment.
 
 ### Configuration file
+
+Keep it enabled explicitly:
 
 ```toml
 [mcp]
@@ -23,14 +28,21 @@ enabled = true
 path = "/mcp"
 ```
 
+Disable it explicitly:
+
+```toml
+[mcp]
+enabled = false
+```
+
+When disabled, the configured MCP path returns `404` and the web UI behaves
+exactly as before.
+
 ### Command line
 
 ```sh
 tailon --mcp-enabled --mcp-path /mcp "group=workbench,/var/log/workbench/*.log"
 ```
-
-MCP is disabled by default. When it is disabled, the configured MCP path
-returns `404` and the web UI behaves exactly as before.
 
 As with every Tailon option, supplying `-c` makes the configuration file
 authoritative; command-line flags are not merged into it.
@@ -269,11 +281,11 @@ not the request's actual latency.
 
 ## Configuration reference
 
-All fields are optional. MCP is disabled unless `enabled = true`.
+All fields are optional. MCP is enabled unless `enabled = false` is set.
 
 ```toml
 [mcp]
-enabled = false
+enabled = true
 path = "/mcp"
 
 # Restrict HTTP Host values. Empty accepts any Host for non-browser clients.
@@ -334,8 +346,8 @@ Notes:
   reachable through a DNS name from browsers.
 - Redaction patterns are Go regular expressions and apply to every message,
   context line and stack trace returned by MCP.
-- Existing Tailon configuration files remain valid; omitting `[mcp]` leaves the
-  feature disabled.
+- Existing Tailon configuration files remain valid; omitting `[mcp]` keeps MCP
+  enabled with the defaults above. Set `enabled = false` to turn it off.
 
 ## Security model
 
@@ -471,8 +483,8 @@ sessions, origin/host checks, request limits and response trimming.
 
 ## Known limitations
 
-- MCP is disabled by default and has no authentication; deploy it on a trusted
-  network.
+- MCP is enabled by default and has no authentication; set `enabled = false`
+  or deploy it on a trusted network.
 - Gzip files support forward scans only. Byte-offset reads and `logs_context`
   return `UNSUPPORTED_FILE_TYPE` for compressed files.
 - Cursors are signed with a per-process key. Restarting Tailon invalidates

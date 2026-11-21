@@ -65,7 +65,10 @@ func TestParseMCPConfigMissingSection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Enabled {
-		t.Fatal("MCP must remain disabled when the section is absent")
+	if !cfg.Enabled {
+		t.Fatal("MCP must remain enabled when the section is absent")
+	}
+	if cfg.Path != "/mcp" {
+		t.Fatalf("default path = %q", cfg.Path)
 	}
 }

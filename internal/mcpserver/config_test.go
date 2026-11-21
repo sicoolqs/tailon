@@ -8,8 +8,8 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.Enabled {
-		t.Fatal("MCP must be disabled by default")
+	if !cfg.Enabled {
+		t.Fatal("MCP must be enabled by default")
 	}
 	if cfg.Path != "/mcp" {
 		t.Fatalf("path = %q", cfg.Path)

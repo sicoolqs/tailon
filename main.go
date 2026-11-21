@@ -79,9 +79,10 @@ The following options can be set through the config file:
   # the default configuration listed below.
   [commands]
 
-  # Optional MCP server for AI agents. Disabled by default.
+  # Optional MCP server for AI agents. Enabled by default.
+  # Set enabled = false to disable it.
   [mcp]
-  enabled = false
+  enabled = true
   path = "/mcp"
 
   # File, glob and dir filespecs are similar in principle to their
@@ -117,10 +118,11 @@ const defaultTomlConfig = `
     action = ["awk", "--sandbox", "$script"]
     default = "{print $0; fflush()}"
 
-  # The MCP server is disabled by default and reuses the Tailon HTTP server.
-  # See the README for the complete [mcp] configuration reference.
+  # The MCP server is enabled by default and reuses the Tailon HTTP server.
+  # Set enabled = false to disable it. See the README for the complete [mcp]
+  # configuration reference.
   [mcp]
-  enabled = false
+  enabled = true
   path = "/mcp"
 `
 

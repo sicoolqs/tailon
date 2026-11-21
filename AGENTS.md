@@ -138,12 +138,14 @@ dist/tailon-2.0.0-stability-linux-amd64
 
 ### MCP server
 
-- MCP is disabled by default (`[mcp].enabled = false`) and shares the existing
-  HTTP server, port and configured file scope. Do not start a separate
-  listener. The default endpoint is `/mcp`.
-- Enable with `[mcp] enabled = true` or `--mcp-enabled`. When disabled, the MCP
-  path returns 404. When `-c` is used, the configuration file is authoritative
-  and command-line flags are not merged.
+- MCP is enabled by default (`[mcp].enabled` defaults to `true`) and shares the
+  existing HTTP server, port and configured file scope. Setting `enabled =
+  false` disables it. Do not start a separate listener. The default endpoint is
+  `/mcp`.
+- No configuration is required to enable MCP. `--mcp-enabled` and
+  `--mcp-path` only override built-in defaults when no config file is used.
+  When disabled, the MCP path returns 404. When `-c` is used, the configuration
+  file is authoritative and command-line flags are not merged.
 - Every file access must go through `logquery.Registry.Open`, which re-resolves
   the `file_id`, resolves symlinks, re-checks the configured scope and verifies
   the opened descriptor.

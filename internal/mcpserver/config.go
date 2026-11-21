@@ -21,11 +21,11 @@ type Config struct {
 	Redaction       logquery.RedactionConfig `mapstructure:"redaction"`
 }
 
-// DefaultConfig returns the MCP defaults. MCP is disabled unless explicitly
-// enabled, so upgrading Tailon never changes an existing deployment.
+// DefaultConfig returns the MCP defaults. MCP is enabled by default; an
+// explicit `enabled = false` in the [mcp] section disables it.
 func DefaultConfig() Config {
 	return Config{
-		Enabled:         false,
+		Enabled:         true,
 		Path:            "/mcp",
 		Timezone:        "Asia/Shanghai",
 		DefaultEncoding: "UTF-8",

@@ -74,7 +74,7 @@ func TestMCPRouteRegistration(t *testing.T) {
 	}
 }
 
-func TestMCPDisabledByDefault(t *testing.T) {
+func TestMCPExplicitlyDisabled(t *testing.T) {
 	oldConfig := config
 	oldHandler := mcpHandler
 	defer func() {
@@ -82,6 +82,7 @@ func TestMCPDisabledByDefault(t *testing.T) {
 		mcpHandler = oldHandler
 	}()
 	config = &Config{RelativeRoot: "/", MCP: mcpserver.DefaultConfig()}
+	config.MCP.Enabled = false
 	mcpHandler = nil
 
 	router := setupRoutes("/")
