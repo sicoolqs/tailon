@@ -62,6 +62,20 @@ func TestParseTraceFields(t *testing.T) {
 	}
 }
 
+func TestParseBracketMDCTrace(t *testing.T) {
+	line := "2026-11-21T14:28:17.208+08:00 INFO  [http-nio-8670-exec-7] [8b5cff7b1d4a-c99d878693fed953] c.a.w.a.a.w.l.WebLog"
+	p := parseLine(line, time.UTC)
+	if p.TraceID != "8b5cff7b1d4a" {
+		t.Fatalf("trace id = %q", p.TraceID)
+	}
+	if p.SpanID != "c99d878693fed953" {
+		t.Fatalf("span id = %q", p.SpanID)
+	}
+	if p.Level != "INFO" {
+		t.Fatalf("level = %q", p.Level)
+	}
+}
+
 func TestMultilineJavaEvent(t *testing.T) {
 	content := `2026-11-21 10:25:31.125 ERROR Failed to process request
 java.lang.RuntimeException: Request failed

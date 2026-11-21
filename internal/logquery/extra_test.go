@@ -154,6 +154,40 @@ func TestScanBudgetTruncation(t *testing.T) {
 	}
 }
 
+func TestTraceBracketMDCFormat(t *testing.T) {
+	dir := t.TempDir()
+	base := time.Now().UTC().Add(-10 * time.Minute)
+	lines := []string{
+		base.Format("2006-01-02T15:04:05.000Z07:00") + " INFO  [thread-1] [abcdef123456-0123456789abcdef] received",
+		base.Add(time.Second).Format("2006-01-02T15:04:05.000Z07:00") + " ERROR [thread-1] [abcdef123456-0123456789abcdef] failed",
+		base.Add(2*time.Second).Format("2006-01-02T15:04:05.000Z07:00") + " INFO  [thread-2] [ffffffffffff-1111111111111111] other",
+	}
+	path := filepath.Join(dir, "app.log")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{Timezone: "UTC", DefaultEncoding: "UTF-8", SupportGzip: true, Limits: DefaultLimits()}
+	svc, err := NewService(func() []Spec {
+		return []Spec{{Path: path, Type: "file", Group: "app"}}
+	}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := svc.Trace(context.Background(), TraceRequest{TraceID: "abcdef123456", Since: "1h", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.EventCount != 2 {
+		t.Fatalf("event count = %d (%#v)", res.EventCount, res.Timeline)
+	}
+	if len(res.Errors) != 1 {
+		t.Fatalf("errors = %#v", res.Errors)
+	}
+	if res.Timeline[0].SpanID == nil || *res.Timeline[0].SpanID != "0123456789abcdef" {
+		t.Fatalf("span id = %v", res.Timeline[0].SpanID)
+	}
+}
+
 func TestGlobDiscoveryAndRotation(t *testing.T) {
 	dir := t.TempDir()
 	pathA := filepath.Join(dir, "a.log")

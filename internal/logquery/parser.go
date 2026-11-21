@@ -74,6 +74,10 @@ var timestampRE = regexp.MustCompile(
 
 var idFieldsRE = regexp.MustCompile(`(?i)\b(trace[_-]?id|traceid|tid|request[_-]?id|req[_-]?id|requestid|correlation[_-]?id|correlationid|corr[_-]?id|parent[_-]?span[_-]?id|parentspanid|span[_-]?id|spanid)\s*[=:]\s*["']?([A-Za-z0-9._:/-]{4,128})`)
 
+// bracketTraceRE recognizes the common Logback MDC pattern
+// "[<traceId>-<spanId>]" used by this project's Java services.
+var bracketTraceRE = regexp.MustCompile(`\[([0-9a-fA-F]{8,32})-([0-9a-fA-F]{8,32})\]`)
+
 var exceptionRE = regexp.MustCompile(`\b((?:[A-Za-z_$][\w$]*\.)+[A-Za-z_$][\w$]*(?:Exception|Error)|[A-Za-z_$][\w$]*(?:Exception|Error))\b`)
 
 var levelTokens = []string{"WARNING", "CRITICAL", "SEVERE", "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"}
@@ -230,9 +234,12 @@ func normalizeLevel(s string) string {
 }
 
 func (p *parsedLine) extractIDs(text string) {
-	// Most log lines do not carry identifiers; avoid a regex scan for them.
-	if !strings.Contains(text, "Id") && !strings.Contains(text, "ID") && !strings.Contains(text, "id") {
-		return
+	hasLabel := strings.Contains(text, "Id") || strings.Contains(text, "ID") || strings.Contains(text, "id")
+	if !hasLabel {
+		// Bracket MDC identifiers do not contain the literal "id" label.
+		if !strings.Contains(text, "[") || !strings.Contains(text, "-") {
+			return
+		}
 	}
 	matches := idFieldsRE.FindAllStringSubmatch(text, 8)
 	for _, m := range matches {
@@ -261,6 +268,14 @@ func (p *parsedLine) extractIDs(text string) {
 		case "correlation":
 			if p.CorrelationID == "" {
 				p.CorrelationID = value
+			}
+		}
+	}
+	if p.TraceID == "" {
+		if m := bracketTraceRE.FindStringSubmatch(text); m != nil {
+			p.TraceID = m[1]
+			if p.SpanID == "" {
+				p.SpanID = m[2]
 			}
 		}
 	}
