@@ -154,6 +154,55 @@ func TestScanBudgetTruncation(t *testing.T) {
 	}
 }
 
+func TestFitResponsePreservesTraceEvents(t *testing.T) {
+	res := &TraceResult{
+		TimeRange:  SummaryTimeRange{Start: "a", End: "b"},
+		Timeline:   []TraceEvent{{Message: strings.Repeat("x", 5000), Stacktrace: []string{strings.Repeat("y", 5000)}}},
+		EventCount: 1,
+		Meta:       newMeta(),
+	}
+	res.Meta.ReturnedCount = 1
+	if !FitResponse(res, 2000) {
+		t.Fatal("expected response trimming")
+	}
+	if len(res.Timeline) != 1 {
+		t.Fatalf("timeline was dropped instead of trimmed: %d", len(res.Timeline))
+	}
+	if res.Timeline[0].Stacktrace != nil {
+		t.Fatal("stacktrace should be stripped before dropping events")
+	}
+	if len(res.Timeline[0].Message) > responseMessageLimit+3 {
+		t.Fatalf("message was not truncated: %d", len(res.Timeline[0].Message))
+	}
+	if res.Meta.TruncationReason != TruncationResponseLimit || !res.Meta.Truncated {
+		t.Fatalf("meta = %#v", res.Meta)
+	}
+}
+
+func TestFitResponsePreservesSearchHits(t *testing.T) {
+	res := &SearchResult{
+		Results: []SearchHit{{
+			Message:       strings.Repeat("x", 5000),
+			ContextBefore: []string{strings.Repeat("c", 5000)},
+			ContextAfter:  []string{strings.Repeat("d", 5000)},
+			Stacktrace:    []string{strings.Repeat("s", 5000)},
+		}},
+		Meta: newMeta(),
+	}
+	res.Meta.ReturnedCount = 1
+	FitResponse(res, 1500)
+	if len(res.Results) != 1 {
+		t.Fatalf("results were dropped instead of trimmed: %d", len(res.Results))
+	}
+	hit := res.Results[0]
+	if len(hit.ContextBefore) != 0 || len(hit.ContextAfter) != 0 || hit.Stacktrace != nil {
+		t.Fatalf("details were not stripped: %#v", hit)
+	}
+	if len(hit.Message) > responseMessageLimit+3 {
+		t.Fatalf("message was not truncated: %d", len(hit.Message))
+	}
+}
+
 func TestTraceBracketMDCFormat(t *testing.T) {
 	dir := t.TempDir()
 	base := time.Now().UTC().Add(-10 * time.Minute)

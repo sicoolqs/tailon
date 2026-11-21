@@ -43,6 +43,9 @@ func shrinkOnce(v any) bool {
 		r.Meta.ReturnedCount = len(r.Files)
 		return true
 	case *TailResult:
+		if truncateTailMessages(r) {
+			return true
+		}
 		if len(r.Entries) == 0 {
 			return false
 		}
@@ -50,6 +53,9 @@ func shrinkOnce(v any) bool {
 		r.Meta.ReturnedCount = len(r.Entries)
 		return true
 	case *SearchResult:
+		if stripSearchDetails(r) {
+			return true
+		}
 		if len(r.Results) == 0 {
 			return false
 		}
@@ -57,6 +63,9 @@ func shrinkOnce(v any) bool {
 		r.Meta.ReturnedCount = len(r.Results)
 		return true
 	case *ContextResult:
+		if truncateContextLines(r) {
+			return true
+		}
 		if len(r.Lines) == 0 {
 			return false
 		}
@@ -100,6 +109,9 @@ func shrinkOnce(v any) bool {
 		}
 		return false
 	case *TraceResult:
+		if stripTraceDetails(r) {
+			return true
+		}
 		switch {
 		case len(r.Timeline) > 0:
 			r.Timeline = r.Timeline[:len(r.Timeline)/2]
@@ -125,20 +137,28 @@ func shrinkOnce(v any) bool {
 func markResponseTruncated(v any) {
 	switch r := v.(type) {
 	case *ListResult:
-		r.Meta.Truncate(TruncationResponseLimit)
+		markResponseMeta(&r.Meta)
 	case *TailResult:
-		r.Meta.Truncate(TruncationResponseLimit)
+		markResponseMeta(&r.Meta)
 	case *SearchResult:
-		r.Meta.Truncate(TruncationResponseLimit)
+		markResponseMeta(&r.Meta)
 	case *ContextResult:
-		r.Meta.Truncate(TruncationResponseLimit)
+		markResponseMeta(&r.Meta)
 	case *ReadResult:
-		r.Meta.Truncate(TruncationResponseLimit)
+		markResponseMeta(&r.Meta)
 	case *SummaryResult:
-		r.Meta.Truncate(TruncationResponseLimit)
+		markResponseMeta(&r.Meta)
 	case *TraceResult:
-		r.Meta.Truncate(TruncationResponseLimit)
+		markResponseMeta(&r.Meta)
 	}
+}
+
+func markResponseMeta(m *Meta) {
+	m.Complete = false
+	m.Truncated = true
+	// Response trimming is the most immediate reason, even if a result limit
+	// was also reached during the scan.
+	m.TruncationReason = TruncationResponseLimit
 }
 
 func truncateAtLineBoundary(s string, limit int) string {
@@ -154,4 +174,98 @@ func truncateAtLineBoundary(s string, limit int) string {
 		limit--
 	}
 	return s[:limit]
+}
+
+// responseMessageLimit is the point at which response trimming shortens a
+// message before dropping an entire result.
+const responseMessageLimit = 512
+
+func truncateUTF8(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	cut := limit
+	for cut > 0 && (s[cut]&0xC0) == 0x80 {
+		cut--
+	}
+	if cut <= 0 {
+		return "..."
+	}
+	return s[:cut] + "..."
+}
+
+func truncateTailMessages(r *TailResult) bool {
+	changed := false
+	for i := range r.Entries {
+		if len(r.Entries[i].Message) > responseMessageLimit {
+			r.Entries[i].Message = truncateUTF8(r.Entries[i].Message, responseMessageLimit)
+			changed = true
+		}
+	}
+	return changed
+}
+
+func stripSearchDetails(r *SearchResult) bool {
+	changed := false
+	for i := range r.Results {
+		h := &r.Results[i]
+		if len(h.Stacktrace) > 0 {
+			h.Stacktrace = nil
+			changed = true
+		}
+		if len(h.ContextBefore) > 0 {
+			h.ContextBefore = []string{}
+			changed = true
+		}
+		if len(h.ContextAfter) > 0 {
+			h.ContextAfter = []string{}
+			changed = true
+		}
+	}
+	if changed {
+		return true
+	}
+	for i := range r.Results {
+		if len(r.Results[i].Message) > responseMessageLimit {
+			r.Results[i].Message = truncateUTF8(r.Results[i].Message, responseMessageLimit)
+			changed = true
+		}
+	}
+	return changed
+}
+
+func truncateContextLines(r *ContextResult) bool {
+	changed := false
+	for i := range r.Lines {
+		if len(r.Lines[i].Text) > responseMessageLimit {
+			r.Lines[i].Text = truncateUTF8(r.Lines[i].Text, responseMessageLimit)
+			changed = true
+		}
+	}
+	return changed
+}
+
+func stripTraceDetails(r *TraceResult) bool {
+	changed := false
+	lists := [][]TraceEvent{r.Timeline, r.Untimed, r.Errors}
+	for _, list := range lists {
+		for i := range list {
+			if len(list[i].Stacktrace) > 0 {
+				list[i].Stacktrace = nil
+				changed = true
+			}
+		}
+	}
+	if changed {
+		return true
+	}
+	for _, list := range lists {
+		for i := range list {
+			if len(list[i].Message) > responseMessageLimit {
+				list[i].Message = truncateUTF8(list[i].Message, responseMessageLimit)
+				changed = true
+			}
+		}
+	}
+	return changed
 }
